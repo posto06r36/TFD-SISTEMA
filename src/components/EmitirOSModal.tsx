@@ -28,6 +28,7 @@ interface EmitirOSModalProps {
   db: TFDDatabase;
   activeUser: UsuarioSistema;
   onSuccessEmitida: (novaSol: SolicitacaoTFD) => void;
+  preSelectedPatientId?: string | null;
 }
 
 export const EmitirOSModal: React.FC<EmitirOSModalProps> = ({
@@ -36,10 +37,20 @@ export const EmitirOSModal: React.FC<EmitirOSModalProps> = ({
   db,
   activeUser,
   onSuccessEmitida,
+  preSelectedPatientId,
 }) => {
   // Patient selection or quick search
   const [searchDoc, setSearchDoc] = useState('');
-  const [selectedPatientId, setSelectedPatientId] = useState<string>(db.pacientes[0]?.id || '');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(
+    preSelectedPatientId || db.pacientes[0]?.id || ''
+  );
+
+  React.useEffect(() => {
+    if (preSelectedPatientId) {
+      setSelectedPatientId(preSelectedPatientId);
+      setIsNewPatient(false);
+    }
+  }, [preSelectedPatientId]);
 
   // Patient manual fields if new
   const [isNewPatient, setIsNewPatient] = useState(false);

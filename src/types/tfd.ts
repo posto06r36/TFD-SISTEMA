@@ -152,6 +152,7 @@ export interface DiariaAjudaCusto {
 export interface UsuarioSistema {
   id: string;
   cpf: string;
+  senha?: string;
   senha_hash?: string;
   nome_completo: string;
   perfil: PerfilUsuario;

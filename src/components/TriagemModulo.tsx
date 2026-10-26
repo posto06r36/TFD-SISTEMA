@@ -42,9 +42,18 @@ interface TriagemModuloProps {
   onUpdateDb: (updater: (prev: TFDDatabase) => TFDDatabase) => void;
   onOpenOrdemTFD: (sol: SolicitacaoTFD) => void;
   onOpenEtiqueta: (sol: SolicitacaoTFD) => void;
+  onOpenCadastroModal?: () => void;
+  onOpenEmitirOS?: (patientId?: string) => void;
 }
 
-export const TriagemModulo: React.FC<TriagemModuloProps> = ({ db, onUpdateDb, onOpenOrdemTFD, onOpenEtiqueta }) => {
+export const TriagemModulo: React.FC<TriagemModuloProps> = ({ 
+  db, 
+  onUpdateDb, 
+  onOpenOrdemTFD, 
+  onOpenEtiqueta,
+  onOpenCadastroModal,
+  onOpenEmitirOS,
+}) => {
   // Search state
   const [searchDoc, setSearchDoc] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
@@ -52,9 +61,10 @@ export const TriagemModulo: React.FC<TriagemModuloProps> = ({ db, onUpdateDb, on
   // Filter state for requests table
   const [statusFilter, setStatusFilter] = useState<string>('Todos');
   const [searchTableQuery, setSearchTableQuery] = useState('');
+  const [searchPatientQuery, setSearchPatientQuery] = useState('');
 
-  // Form Mode: 'list' or 'new_request'
-  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  // Form Mode: 'list', 'pacientes', or 'create'
+  const [viewMode, setViewMode] = useState<'list' | 'pacientes' | 'create'>('list');
 
   // Patient Form Fields
   const [cpf, setCpf] = useState('');
@@ -349,7 +359,7 @@ export const TriagemModulo: React.FC<TriagemModuloProps> = ({ db, onUpdateDb, on
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setViewMode('list')}
             className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
@@ -358,21 +368,43 @@ export const TriagemModulo: React.FC<TriagemModuloProps> = ({ db, onUpdateDb, on
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Lista de Solicitações ({db.solicitacoes_tfd.length})
+            Solicitações TFD ({db.solicitacoes_tfd.length})
           </button>
+
+          <button
+            onClick={() => setViewMode('pacientes')}
+            className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+              viewMode === 'pacientes'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Cadastro de Pacientes ({db.pacientes.length})
+          </button>
+
+          {onOpenCadastroModal && (
+            <button
+              onClick={onOpenCadastroModal}
+              className="px-3 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-emerald-700" />
+              <span>+ Novo Paciente</span>
+            </button>
+          )}
+
           <button
             onClick={() => {
               resetForm();
               setViewMode('create');
             }}
-            className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
               viewMode === 'create'
                 ? 'bg-emerald-700 text-white'
                 : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
             }`}
           >
-            <UserPlus className="w-4 h-4" />
-            Nova Solicitação
+            <FileText className="w-4 h-4" />
+            <span>+ Fazer Ordem TFD</span>
           </button>
         </div>
       </div>
@@ -1181,6 +1213,165 @@ export const TriagemModulo: React.FC<TriagemModuloProps> = ({ db, onUpdateDb, on
                       );
                     })
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PACIENTES MODE: CADASTRO GERAL DE PACIENTES */}
+      {viewMode === 'pacientes' && (
+        <div className="space-y-4">
+          {/* Header & Search Bar */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-50 text-emerald-800">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  Prontuário e Cadastro Geral de Pacientes do Município
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {db.pacientes.length} paciente(s) registrado(s) no sistema de Tratamento Fora do Domicílio
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative w-full md:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchPatientQuery}
+                  onChange={(e) => setSearchPatientQuery(e.target.value)}
+                  placeholder="Buscar por nome, CPF ou SUS..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:border-emerald-600 font-medium"
+                />
+              </div>
+
+              {onOpenCadastroModal && (
+                <button
+                  type="button"
+                  onClick={onOpenCadastroModal}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Cadastrar Paciente</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Pacientes Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="py-3 px-4">Paciente / Prioridade</th>
+                    <th className="py-3 px-4">CPF & Cartão SUS</th>
+                    <th className="py-3 px-4">Contato & Bairro</th>
+                    <th className="py-3 px-4">USF de Referência</th>
+                    <th className="py-3 px-4 text-center">Ordens TFD</th>
+                    <th className="py-3 px-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {db.pacientes
+                    .filter((p) => {
+                      if (!searchPatientQuery) return true;
+                      const q = searchPatientQuery.toLowerCase();
+                      return (
+                        p.nome_completo.toLowerCase().includes(q) ||
+                        p.cpf.includes(q) ||
+                        p.cartao_sus.includes(q) ||
+                        p.bairro.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((pac) => {
+                      const usf = db.unidades_saude.find((u) => u.id === pac.unidade_saude_id);
+                      const totalSols = db.solicitacoes_tfd.filter((s) => s.paciente_id === pac.id).length;
+
+                      return (
+                        <tr key={pac.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-slate-900 text-xs">
+                              {pac.nome_completo}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              Nasc.: {formatDateBR(pac.data_nascimento)}
+                            </div>
+                            {pac.grupo_vulnerabilidade && pac.grupo_vulnerabilidade !== 'Nenhum' && (
+                              <span className="inline-block mt-1 text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200/60 font-semibold">
+                                {pac.grupo_vulnerabilidade}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 font-mono">
+                            <div className="text-slate-800 font-bold">
+                              CPF: {pac.cpf}
+                            </div>
+                            <div className="text-slate-500 text-[11px] mt-0.5">
+                              CNS: {pac.cartao_sus}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-slate-600">
+                            <div className="font-medium text-slate-800">
+                              {pac.telefone_whatsapp}
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
+                              {pac.endereco}, {pac.bairro}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-slate-600">
+                            <div className="font-medium text-slate-800">
+                              {usf?.nome || 'USF de Referência'}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              CNES: {usf?.cnes || 'N/D'}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                              {totalSols}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  if (onOpenEmitirOS) {
+                                    onOpenEmitirOS(pac.id);
+                                  } else {
+                                    loadPatientData(pac);
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                                title="Emitir Nova Ordem de Transporte TFD para este paciente"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Fazer Ordem TFD</span>
+                              </button>
+
+                              <button
+                                onClick={() => loadPatientData(pac)}
+                                className="px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                                title="Editar dados cadastrais deste paciente"
+                              >
+                                Editar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   getTFDDatabase, 
   saveTFDDatabase, 
@@ -12,9 +12,11 @@ import {
   PassageiroViagem, 
   ViagemAgendada, 
   DiariaAjudaCusto,
-  SolicitacaoTFD 
+  SolicitacaoTFD,
+  Paciente 
 } from './types/tfd';
 
+import { LoginScreen } from './components/LoginScreen';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { MonitoramentoTempoRealModulo } from './components/MonitoramentoTempoRealModulo';
@@ -22,18 +24,34 @@ import { TriagemModulo } from './components/TriagemModulo';
 import { FrotaViagensModulo } from './components/FrotaViagensModulo';
 import { EmbarqueModulo } from './components/EmbarqueModulo';
 import { DiariasModulo } from './components/DiariasModulo';
+import { OperadoresModulo } from './components/OperadoresModulo';
 import { ThermalVoucherModal } from './components/ThermalVoucherModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { OrdemTFDModal } from './components/OrdemTFDModal';
 import { EtiquetaPacienteModal } from './components/EtiquetaPacienteModal';
 import { EmitirOSModal } from './components/EmitirOSModal';
+import { CadastroPacienteModal } from './components/CadastroPacienteModal';
+import { GoogleSheetsManagerModal } from './components/GoogleSheetsManagerModal';
+import { initAuth, subscribeAuth, getAccessToken } from './services/googleAuth';
+import { 
+  GoogleSheetMeta, 
+  findTFDSpreadsheet, 
+  pushDatabaseToSheets, 
+  getStoredSpreadsheetId 
+} from './services/googleSheetsService';
 import { Building2 } from 'lucide-react';
 
 export default function App() {
   const [db, setDb] = useState<TFDDatabase>(() => getTFDDatabase());
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [activeUser, setActiveUserState] = useState<UsuarioSistema>(() => getActiveUser());
+  const [activeUser, setActiveUserState] = useState<UsuarioSistema | null>(() => getActiveUser());
   const [selectedViagemIdForEmbarque, setSelectedViagemIdForEmbarque] = useState<string | null>(null);
+
+  // Google Sheets Workspace State
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [sheetMeta, setSheetMeta] = useState<GoogleSheetMeta | null>(null);
+  const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState<boolean>(false);
 
   // Thermal voucher modal state
   const [thermalModalState, setThermalModalState] = useState<{
@@ -77,26 +95,72 @@ export default function App() {
 
   // Fast Emitir OS modal state
   const [showEmitirOSModal, setShowEmitirOSModal] = useState<boolean>(false);
+  const [selectedPatientForOS, setSelectedPatientForOS] = useState<string | null>(null);
 
-  // Persist DB state changes
+  // Dedicated Cadastro Paciente modal state
+  const [showCadastroPacienteModal, setShowCadastroPacienteModal] = useState<boolean>(false);
+
+  // Initialize Google Auth & Sheets connection
+  useEffect(() => {
+    initAuth();
+    const unsubscribe = subscribeAuth(async (user, token) => {
+      setGoogleUser(user);
+      setGoogleToken(token);
+      if (token) {
+        // Try to find the existing TFD spreadsheet in Google Drive
+        const found = await findTFDSpreadsheet(token);
+        if (found) {
+          setSheetMeta(found);
+        } else {
+          const storedId = getStoredSpreadsheetId();
+          if (storedId) {
+            setSheetMeta({
+              id: storedId,
+              name: 'Central TFD Municipal - Banco de Dados',
+              webViewLink: `https://docs.google.com/spreadsheets/d/${storedId}/edit`,
+            });
+          }
+        }
+      } else {
+        setSheetMeta(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Persist DB state changes and sync to Google Sheets if connected
   const handleUpdateDb = (updater: (prev: TFDDatabase) => TFDDatabase) => {
     setDb((prev) => {
       const next = updater(prev);
       saveTFDDatabase(next);
+
+      // Background sync to Google Sheets if active
+      if (googleToken && sheetMeta) {
+        pushDatabaseToSheets(googleToken, sheetMeta.id, next).catch((err) => {
+          console.warn('Background sync to Google Sheets failed:', err);
+        });
+      }
+
       return next;
     });
   };
 
-  const handleSelectUser = (user: UsuarioSistema) => {
+  const handleLoginSuccess = (user: UsuarioSistema) => {
     setActiveUserState(user);
     setActiveUser(user);
   };
 
+  const handleLogout = () => {
+    setActiveUserState(null);
+    setActiveUser(null);
+    setCurrentTab('dashboard');
+  };
+
   const handleResetData = () => {
-    if (window.confirm('Deseja restaurar os dados de demonstração iniciais do TFD Municipal? Todas as alterações manuais serão resetadas.')) {
+    if (window.confirm('Deseja restaurar a base de dados inicial com 1 exemplo de cada serviço e o acesso Master (13012994483)? Todas as alterações manuais serão resetadas.')) {
       const fresh = resetTFDDatabase();
       setDb(fresh);
-      alert('Dados restaurados com sucesso!');
+      alert('Dados restaurados com sucesso! Base limpa com 1 exemplo de cada serviço.');
     }
   };
 
@@ -151,11 +215,35 @@ export default function App() {
     handleOpenEtiqueta(novaSol);
   };
 
+  // Quick action from patient list to issue order
+  const handleOpenEmitirOSForPatient = (patientId?: string) => {
+    setSelectedPatientForOS(patientId || null);
+    setShowEmitirOSModal(true);
+  };
+
+  // Saving patient from direct modal
+  const handleSavePaciente = (novoPaciente: Paciente, abrirOrdemDireta?: boolean) => {
+    handleUpdateDb((prev) => ({
+      ...prev,
+      pacientes: [novoPaciente, ...prev.pacientes.filter((p) => p.id !== novoPaciente.id)],
+    }));
+
+    if (abrirOrdemDireta) {
+      setSelectedPatientForOS(novoPaciente.id);
+      setShowEmitirOSModal(true);
+    }
+  };
+
   // Quick navigation to Embarque for a specific trip
   const handleSelectViagemEmbarque = (viagemId: string) => {
     setSelectedViagemIdForEmbarque(viagemId);
     setCurrentTab('embarque');
   };
+
+  // If user is not authenticated, show municipal login screen
+  if (!activeUser) {
+    return <LoginScreen db={db} onLoginSuccess={handleLoginSuccess} />;
+  }
 
   // Counts for navbar badges
   const pendingCount = db.solicitacoes_tfd.filter((s) => s.status === 'Pendente').length;
@@ -201,11 +289,15 @@ export default function App() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         activeUser={activeUser}
-        onSelectUser={handleSelectUser}
-        usersList={db.usuarios_sistema}
+        onLogout={handleLogout}
+        onOpenCadastroPaciente={() => setShowCadastroPacienteModal(true)}
+        onOpenEmitirOS={() => handleOpenEmitirOSForPatient()}
         onResetData={handleResetData}
         pendingCount={pendingCount}
         tripsTodayCount={tripsTodayCount}
+        googleUser={googleUser}
+        sheetMeta={sheetMeta}
+        onOpenGoogleSheetsModal={() => setShowGoogleSheetsModal(true)}
       />
 
       {/* Main Content Area */}
@@ -216,6 +308,8 @@ export default function App() {
             onNavigate={(tab) => setCurrentTab(tab)}
             onSelectViagemEmbarque={handleSelectViagemEmbarque}
             onOpenOrdemTFD={handleOpenOrdemTFD}
+            sheetMeta={sheetMeta}
+            onOpenGoogleSheetsModal={() => setShowGoogleSheetsModal(true)}
           />
         )}
 
@@ -225,7 +319,7 @@ export default function App() {
             activeUser={activeUser}
             onOpenEtiqueta={handleOpenEtiqueta}
             onOpenOrdemTFD={handleOpenOrdemTFD}
-            onEmitirNovaOS={() => setShowEmitirOSModal(true)}
+            onEmitirNovaOS={() => handleOpenEmitirOSForPatient()}
           />
         )}
 
@@ -235,6 +329,8 @@ export default function App() {
             onUpdateDb={handleUpdateDb}
             onOpenOrdemTFD={handleOpenOrdemTFD}
             onOpenEtiqueta={handleOpenEtiqueta}
+            onOpenCadastroModal={() => setShowCadastroPacienteModal(true)}
+            onOpenEmitirOS={handleOpenEmitirOSForPatient}
           />
         )}
 
@@ -264,6 +360,14 @@ export default function App() {
             onOpenReceiptModal={handleOpenReceipt}
           />
         )}
+
+        {currentTab === 'operadores' && (
+          <OperadoresModulo
+            db={db}
+            activeUser={activeUser}
+            onUpdateDb={handleUpdateDb}
+          />
+        )}
       </main>
 
       {/* Municipal Footer */}
@@ -282,7 +386,7 @@ export default function App() {
             <span>•</span>
             <span>Lei Federal nº 8.080/1990</span>
             <span>•</span>
-            <span>Versão 2.5.0 Estável</span>
+            <span>Versão 3.0.0 Oficial</span>
           </div>
         </div>
       </footer>
@@ -337,10 +441,37 @@ export default function App() {
       {/* Emitir OS Rápida com Ponto de Espera Modal */}
       <EmitirOSModal
         isOpen={showEmitirOSModal}
-        onClose={() => setShowEmitirOSModal(false)}
+        onClose={() => {
+          setShowEmitirOSModal(false);
+          setSelectedPatientForOS(null);
+        }}
         db={db}
         activeUser={activeUser}
         onSuccessEmitida={handleSuccessEmitida}
+        preSelectedPatientId={selectedPatientForOS}
+      />
+
+      {/* Direct Cadastro Paciente Modal */}
+      <CadastroPacienteModal
+        isOpen={showCadastroPacienteModal}
+        onClose={() => setShowCadastroPacienteModal(false)}
+        db={db}
+        onSavePaciente={handleSavePaciente}
+      />
+
+      {/* Google Sheets Database Manager Modal */}
+      <GoogleSheetsManagerModal
+        isOpen={showGoogleSheetsModal}
+        onClose={() => setShowGoogleSheetsModal(false)}
+        database={db}
+        onDatabaseUpdate={(newDb) => {
+          setDb(newDb);
+          saveTFDDatabase(newDb);
+        }}
+        googleUser={googleUser}
+        accessToken={googleToken}
+        sheetMeta={sheetMeta}
+        onSheetMetaChange={setSheetMeta}
       />
     </div>
   );

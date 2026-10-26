@@ -13,7 +13,8 @@ import {
   QrCode,
   ShieldCheck,
   CheckCircle2,
-  FileBadge
+  FileBadge,
+  FileSpreadsheet
 } from 'lucide-react';
 import { TFDDatabase, ViagemAgendada, SolicitacaoTFD } from '../types/tfd';
 import { formatBRL, formatDateBR } from '../utils/masks';
@@ -23,6 +24,8 @@ interface DashboardProps {
   onNavigate: (tab: string) => void;
   onSelectViagemEmbarque: (viagemId: string) => void;
   onOpenOrdemTFD: (sol: SolicitacaoTFD) => void;
+  sheetMeta?: any;
+  onOpenGoogleSheetsModal?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -30,6 +33,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate,
   onSelectViagemEmbarque,
   onOpenOrdemTFD,
+  sheetMeta,
+  onOpenGoogleSheetsModal,
 }) => {
   // Metrics calculation
   const pendingRequests = db.solicitacoes_tfd.filter((s) => s.status === 'Pendente');
@@ -100,6 +105,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <QrCode className="w-4 h-4" />
               Terminal de Embarque
             </button>
+            {onOpenGoogleSheetsModal && (
+              <button
+                onClick={onOpenGoogleSheetsModal}
+                className="px-4 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-xs font-semibold rounded-xl border border-emerald-400/30 transition-all flex items-center gap-2 cursor-pointer"
+                title="Gerenciar e sincronizar com o banco de dados no Google Planilhas"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                {sheetMeta ? 'Planilha Google (Conectada)' : 'Conectar Google Planilha'}
+              </button>
+            )}
           </div>
         </div>
       </div>
