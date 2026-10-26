@@ -1,0 +1,6 @@
+{
+  "name": "Central TFD Municipal",
+  "description": "Sistema de Gestão da Central de Tratamento Fora do Domicílio (TFD) para Prefeituras Municipais - Triagem, Frotas, Embarque 58mm e Diárias.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
