@@ -88,15 +88,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
               Nova Solicitação
             </button>
             <button
-              onClick={() => {
-                const approved = db.solicitacoes_tfd.find((s) => s.status === 'Aprovado') || db.solicitacoes_tfd[0];
-                if (approved) onOpenOrdemTFD(approved);
-              }}
+              onClick={() => onNavigate('ordens')}
               className="px-4 py-2.5 bg-emerald-700/80 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-500/50 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
-              title="Emitir Ordem Oficial de Transporte Gratuito do SUS"
+              title="Visualizar relação de Ordens TFD e imprimir guias oficiais A4 e etiquetas"
             >
               <FileBadge className="w-4 h-4 text-emerald-300" />
-              Ordem TFD Gratuita
+              Ordens TFD & Impressão
             </button>
             <button
               onClick={() => onNavigate('embarque')}

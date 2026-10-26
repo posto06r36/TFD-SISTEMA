@@ -28,6 +28,7 @@ interface NavbarProps {
   onResetData: () => void;
   pendingCount: number;
   tripsTodayCount: number;
+  totalOrdersCount?: number;
   googleUser: any;
   sheetMeta: any;
   onOpenGoogleSheetsModal: () => void;
@@ -43,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetData,
   pendingCount,
   tripsTodayCount,
+  totalOrdersCount = 0,
   googleUser,
   sheetMeta,
   onOpenGoogleSheetsModal,
@@ -128,10 +130,29 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <UserPlus className="w-4 h-4" />
-              <span>Triagem & Pacientes</span>
+              <span>Triagem</span>
               {pendingCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500 text-white tabular-nums">
                   {pendingCount}
+                </span>
+              )}
+            </button>
+
+            {/* Ordens TFD Emitidas (Master & Operators) */}
+            <button
+              onClick={() => setCurrentTab('ordens')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                currentTab === 'ordens'
+                  ? 'bg-emerald-800 text-white font-bold shadow-xs'
+                  : 'text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50'
+              }`}
+              title="Aba Master: Visualizar pacientes com ordens emitidas e imprimir guias/etiquetas"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Ordens TFD</span>
+              {totalOrdersCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-600 text-white tabular-nums">
+                  {totalOrdersCount}
                 </span>
               )}
             </button>
@@ -339,6 +360,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`px-2 py-1 rounded font-medium whitespace-nowrap ${currentTab === 'triagem' ? 'bg-slate-900 text-white font-bold' : 'text-slate-600'}`}
           >
             Pacientes ({pendingCount})
+          </button>
+          <button
+            onClick={() => setCurrentTab('ordens')}
+            className={`px-2 py-1 rounded font-medium whitespace-nowrap flex items-center gap-1 ${currentTab === 'ordens' ? 'bg-emerald-800 text-white font-bold' : 'text-emerald-700'}`}
+          >
+            <FileText className="w-3 h-3 text-emerald-500" />
+            Ordens ({totalOrdersCount})
           </button>
           <button
             onClick={() => setCurrentTab('frota')}

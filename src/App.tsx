@@ -25,6 +25,7 @@ import { FrotaViagensModulo } from './components/FrotaViagensModulo';
 import { EmbarqueModulo } from './components/EmbarqueModulo';
 import { DiariasModulo } from './components/DiariasModulo';
 import { OperadoresModulo } from './components/OperadoresModulo';
+import { OrdensEmitidasModulo } from './components/OrdensEmitidasModulo';
 import { ThermalVoucherModal } from './components/ThermalVoucherModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { OrdemTFDModal } from './components/OrdemTFDModal';
@@ -205,14 +206,16 @@ export default function App() {
     });
   };
 
-  // When a new OS is emitted from the modal: save in DB and immediately open Etiqueta
+  // When a new OS is emitted: save in DB, navigate to the Ordens tab, and open print modal
   const handleSuccessEmitida = (novaSol: SolicitacaoTFD) => {
     handleUpdateDb((prev) => ({
       ...prev,
       solicitacoes_tfd: [novaSol, ...prev.solicitacoes_tfd.filter((s) => s.id !== novaSol.id)],
     }));
-    // Open the printed slip for the patient
-    handleOpenEtiqueta(novaSol);
+    // Redirect to the Ordens TFD tab so the Master immediately sees the patient name on top
+    setCurrentTab('ordens');
+    // Open the official printable order
+    handleOpenOrdemTFD(novaSol);
   };
 
   // Quick action from patient list to issue order
@@ -295,6 +298,7 @@ export default function App() {
         onResetData={handleResetData}
         pendingCount={pendingCount}
         tripsTodayCount={tripsTodayCount}
+        totalOrdersCount={db.solicitacoes_tfd.length}
         googleUser={googleUser}
         sheetMeta={sheetMeta}
         onOpenGoogleSheetsModal={() => setShowGoogleSheetsModal(true)}
@@ -310,6 +314,16 @@ export default function App() {
             onOpenOrdemTFD={handleOpenOrdemTFD}
             sheetMeta={sheetMeta}
             onOpenGoogleSheetsModal={() => setShowGoogleSheetsModal(true)}
+          />
+        )}
+
+        {currentTab === 'ordens' && (
+          <OrdensEmitidasModulo
+            db={db}
+            activeUser={activeUser}
+            onOpenOrdemTFD={handleOpenOrdemTFD}
+            onOpenEtiqueta={handleOpenEtiqueta}
+            onOpenEmitirOS={() => handleOpenEmitirOSForPatient()}
           />
         )}
 

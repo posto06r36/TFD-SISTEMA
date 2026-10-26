@@ -9,11 +9,10 @@ import {
   AlertCircle, 
   KeyRound, 
   HeartHandshake,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { UsuarioSistema, TFDDatabase } from '../types/tfd';
-import { maskCPF } from '../utils/masks';
-import { authenticateUser } from '../services/storage';
 
 interface LoginScreenProps {
   db: TFDDatabase;
@@ -21,16 +20,13 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) => {
-  const [cpf, setCpf] = useState('');
+  // Default to the first operator (Master)
+  const defaultUser = db.usuarios_sistema.find((u) => u.perfil === 'Master') || db.usuarios_sistema[0];
+  const [selectedUserId, setSelectedUserId] = useState<string>(defaultUser?.id || '');
   const [senha, setSenha] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCpf(maskCPF(e.target.value));
-    if (errorMsg) setErrorMsg('');
-  };
 
   const handleSenhaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSenha(e.target.value);
@@ -42,19 +38,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) 
     setIsSubmitting(true);
     setErrorMsg('');
 
-    const res = authenticateUser(cpf, senha, db);
-    if (res.success && res.user) {
-      onLoginSuccess(res.user);
-    } else {
-      setErrorMsg(res.message || 'Falha ao autenticar.');
+    const targetUser = db.usuarios_sistema.find((u) => u.id === selectedUserId);
+    if (!targetUser) {
+      setErrorMsg('Operador não encontrado. Selecione um operador cadastrado.');
       setIsSubmitting(false);
+      return;
     }
+
+    if (!targetUser.ativo) {
+      setErrorMsg('Este operador está desativado. Contate a coordenação.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const expectedPass = targetUser.senha || targetUser.senha_hash || '1234';
+    if (expectedPass !== senha.trim()) {
+      setErrorMsg('Senha incorreta. Tente novamente.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    onLoginSuccess(targetUser);
   };
 
-  const handleQuickMasterFill = () => {
-    setCpf('130.129.944-83');
-    setSenha('1234');
-    setErrorMsg('');
+  // Quick 1-click login for Master without typing
+  const handleQuickMasterLogin = () => {
+    const master = db.usuarios_sistema.find((u) => u.perfil === 'Master') || db.usuarios_sistema[0];
+    if (master) {
+      setSelectedUserId(master.id);
+      setSenha(master.senha || '1234');
+      onLoginSuccess(master);
+    }
   };
 
   return (
@@ -86,14 +100,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) 
           </div>
         </div>
 
-        {/* Login Box */}
+        {/* Login Box (NO CPF FIELD AS REQUESTED) */}
         <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 p-6 sm:p-8">
           <div className="flex items-center justify-between pb-5 mb-5 border-b border-slate-100">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Autenticação de Operador</h2>
-              <p className="text-xs text-slate-500">Entre com seu CPF e Senha cadastrados</p>
+              <h2 className="text-lg font-bold text-slate-900">Acesso ao Sistema</h2>
+              <p className="text-xs text-slate-500">Selecione seu perfil e digite sua senha</p>
             </div>
-            <div className="p-2 rounded-xl bg-slate-100 text-slate-600">
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
               <ShieldCheck className="w-5 h-5 text-emerald-700" />
             </div>
           </div>
@@ -108,28 +122,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) 
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Operator Selector (Replaces CPF) */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                CPF do Operador / Master
+                Operador / Usuário
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <User className="w-4 h-4" />
                 </div>
-                <input
-                  type="text"
-                  required
-                  maxLength={14}
-                  value={cpf}
-                  onChange={handleCpfChange}
-                  placeholder="000.000.000-00"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition"
-                  autoComplete="username"
-                  autoFocus
-                />
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition"
+                >
+                  {db.usuarios_sistema.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nome_completo} ({u.perfil})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
+            {/* Password input */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                 Senha de Acesso
@@ -143,9 +159,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) 
                   required
                   value={senha}
                   onChange={handleSenhaChange}
-                  placeholder="••••••••"
+                  placeholder="Digite sua senha (ex: 1234)"
                   className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition"
                   autoComplete="current-password"
+                  autoFocus
                 />
                 <button
                   type="button"
@@ -167,24 +184,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ db, onLoginSuccess }) 
             </button>
           </form>
 
-          {/* Quick Access Helper */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Acesso Inicial Configurado (Master)
-              </span>
-              <p className="text-xs text-slate-700 font-mono font-medium">
-                CPF: <strong className="text-emerald-800">13012994483</strong> | Senha: <strong className="text-emerald-800">1234</strong>
-              </p>
-              <button
-                type="button"
-                onClick={handleQuickMasterFill}
-                className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Preencher Acesso Master Automaticamente
-              </button>
-            </div>
+          {/* Quick 1-click Master Button */}
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleQuickMasterLogin}
+              className="w-full py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <span>Entrar com 1 Clique como Master (Senha 1234)</span>
+            </button>
           </div>
         </div>
 
